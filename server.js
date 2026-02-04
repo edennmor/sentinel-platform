@@ -1,3 +1,4 @@
+const db = require('./db');
 const express = require('express');
 const cors = require('cors');
 
@@ -7,11 +8,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* fake database */
-let tasks = [
-  { id: 1, title: 'Learn backend', done: false },
-  { id: 2, title: 'Build API', done: false }
-];
+
+
+function logSecurityEvent({ ip, path, reason }) {
+  const event = {
+    id: nextEventId++,
+    time: new Date().toISOString(),
+    ip,
+    path,
+    reason
+  };
+  securityEvents.unshift(event); // newest first
+  return event;
+}
+
 
 /* health check */
 app.get('/api/health', (req, res) => {
@@ -29,11 +39,24 @@ app.get('/api/hello', (req, res) => {
   });
 });
 
-/* GET all tasks */
-app.get('/api/tasks', (req, res) => {
-  res.json(tasks);
+/* GET all security events */
+app.get('/api/security-events', (req, res) => {
+  res.json(securityEvents);
 });
 
+app.get('/api/tasks', (req, res) => {
+  db.all('SELECT id, title, done FROM tasks', (err, rows) => {
+    if (err) return res.status(500).json({ error: 'database error' });
+
+    // done ב-SQLite נשמר כ-0/1, נהפוך ל-true/false
+    const result = rows.map(r => ({
+      ...r,
+      done: Boolean(r.done),
+    }));
+
+    res.json(result);
+  });
+});
 
 /* CREATE task */
 app.post('/api/tasks', (req, res) => {
@@ -76,6 +99,13 @@ app.delete('/api/tasks/:id', (req, res) => {
 
   const deleted = tasks.splice(index, 1)[0];
   res.json(deleted);
+});
+
+/* CANARY ENDPOINT */
+app.get('/api/admin', (req, res) => {
+  return res.status(403).json({
+    error: 'Forbidden'
+  });
 });
 
 
